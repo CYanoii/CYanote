@@ -21,6 +21,7 @@
   --sidebar-content-text: #2d3748;
   --sidebar-content-text-secondary: #4a5568;
   --sidebar-content-text-muted: #718096;
+  --sidebar-untagged-dot-color: #4a5568;
   --sidebar-input-bg: #f7fafc;
   --sidebar-input-border: #e2e8f0;
   --sidebar-input-hover-border: #a0aec0;
@@ -118,6 +119,7 @@
   --sidebar-content-text: #e2e8f0;
   --sidebar-content-text-secondary: #a0aec0;
   --sidebar-content-text-muted: #718096;
+  --sidebar-untagged-dot-color: #a0aec0;
   --sidebar-input-bg: #323232;
   --sidebar-input-border: #4a5568;
   --sidebar-input-hover-border: #4299e1;

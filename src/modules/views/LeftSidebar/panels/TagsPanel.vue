@@ -11,7 +11,7 @@ const props = defineProps({
   },
   data: {
     type: Object,
-    default: () => ({ tags: [], tagCounts: {}, tagNotes: {} })
+    default: () => ({ tags: [], tagCounts: {}, tagNotes: {}, untaggedNotes: [] })
   },
   activeNoteId: {
     type: String,
@@ -23,6 +23,10 @@ const props = defineProps({
 const tags = computed(() => props.data?.tags || [])
 const tagCounts = computed(() => props.data?.tagCounts || {})
 const tagNotes = computed(() => props.data?.tagNotes || {})
+const untaggedNotes = computed(() => props.data?.untaggedNotes || [])
+
+// “无标签”虚拟条目的固定 ID
+const UNTAGGED_ID = '__untagged__'
 
 // 标签展开状态 - 使用 reactive Set 以便 Vue 检测变化
 const expandedTagsSet = reactive(new Set())
@@ -101,7 +105,34 @@ defineExpose({
       </button>
     </h3>
     <div class="panel-content">
-      <ul v-if="tags.length > 0" class="tags-list">
+      <ul class="tags-list">
+        <!-- 无标签条目：始终显示在最上方 -->
+        <li
+          class="panel-item tag-main-item"
+          :data-tag-id="UNTAGGED_ID"
+          @click="handleTagClick(UNTAGGED_ID)"
+        >
+          <i
+            class="fas"
+            :class="isTagExpanded(UNTAGGED_ID) ? 'fa-chevron-down' : 'fa-chevron-right'"
+          ></i>
+          <span class="tag-color untagged-color"></span>
+          <span class="tag-name">无标签</span>
+          <span class="tag-count">{{ untaggedNotes.length }}</span>
+        </li>
+        <ul v-if="isTagExpanded(UNTAGGED_ID) && untaggedNotes.length > 0" class="tag-notes-list">
+          <li
+            v-for="note in untaggedNotes"
+            :key="note.id"
+            class="panel-item panel-item-child tag-note-item"
+            :data-note-id="note.id"
+            :data-tag-id="UNTAGGED_ID"
+            @click.stop="handleTagNoteClick(note.id)"
+          >
+            <i :class="getPageIcon(note.pageType)"></i>
+            <span class="tag-note-title">{{ escapeHtml(note.title || '无标题') }}</span>
+          </li>
+        </ul>
         <template v-for="tag in tags" :key="tag.id">
           <li
             class="panel-item tag-main-item"
@@ -147,7 +178,7 @@ defineExpose({
           </ul>
         </template>
       </ul>
-      <p v-else class="panel-empty">暂无标签</p>
+      <p v-if="tags.length === 0" class="panel-empty">暂无标签</p>
     </div>
   </div>
 </template>
@@ -193,6 +224,13 @@ defineExpose({
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+/* 无标签条目图标：实线空心圆点，浅色主题为黑色、深色主题为白色 */
+.tag-color.untagged-color {
+  background: transparent;
+  border: 1.5px solid var(--sidebar-untagged-dot-color);
+  box-sizing: border-box;
 }
 
 .tag-name {

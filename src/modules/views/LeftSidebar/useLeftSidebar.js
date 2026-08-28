@@ -25,7 +25,7 @@ const state = reactive({
 // 面板数据 - 移到组合式函数中以便 UIManager 访问
 const panelData = reactive({
   search: { query: '', results: [] },
-  tags: { tags: [], tagCounts: {}, tagNotes: {} },
+  tags: { tags: [], tagCounts: {}, tagNotes: {}, untaggedNotes: [] },
   archive: { years: [] },
   recent: { notes: [] },
   outline: { headings: [], content: '' },

@@ -210,7 +210,12 @@ export class NoteTagCoordinator {
             tagCounts[tag.id] = tagNotes[tag.id].length;
         }
 
-        this.uiManager.leftSidebar_renderPanelContent('tags', { tags, tagCounts, tagNotes });
+        // 计算无标签笔记（没有任何标签的笔记）
+        const untaggedNotes = allNotes.filter(note =>
+            !Array.isArray(note.tags) || note.tags.length === 0
+        );
+
+        this.uiManager.leftSidebar_renderPanelContent('tags', { tags, tagCounts, tagNotes, untaggedNotes });
     }
 
     /**
