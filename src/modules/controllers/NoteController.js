@@ -183,6 +183,17 @@ export class NoteController {
                     this.uiManager.leftSidebar_renderPanelContent(panelId, []);
                 }
                 break;
+            case 'pages':
+                try {
+                    // 获取所有笔记并按标题字母顺序分组
+                    const allNotes = await this.noteService.getAllNotes();
+                    const grouped = await this.groupNotesByLetter(allNotes);
+                    this.uiManager.leftSidebar_renderPanelContent(panelId, grouped);
+                } catch (error) {
+                    console.error('加载所有页面失败:', error);
+                    this.uiManager.leftSidebar_renderPanelContent(panelId, { groups: [] });
+                }
+                break;
             case 'trash':
                 try {
                     // 获取回收站笔记
@@ -711,6 +722,55 @@ export class NoteController {
             });
 
         return { years };
+    }
+
+    /**
+     * 按标题首字母分组笔记（用于所有页面面板）
+     * 排序规则：按标题拼音字母顺序排序（中文转拼音后比较，忽略声调）
+     * 分组规则：按标题拼音首字母归入 A-Z 组，无法转换的（数字、符号等）归入 # 组
+     * @param {Array} notes 笔记数组
+     * @returns {Promise<Object>} { groups: [{ letter, notes }] }
+     */
+    async groupNotesByLetter(notes) {
+        // 动态加载拼音库（字典较大，按需加载避免增大主包体积）
+        const { pinyin } = await import('pinyin-pro');
+
+        // 预先计算每个标题的拼音（用于排序和首字母分组，缓存避免重复转换）
+        const pinyinCache = new Map();
+        const getPinyin = (title) => {
+            if (!pinyinCache.has(title)) {
+                pinyinCache.set(title, pinyin(title, { toneType: 'none', type: 'array' }).join(''));
+            }
+            return pinyinCache.get(title);
+        };
+
+        const sorted = [...notes].sort((a, b) => {
+            const titleA = (a.title || '无标题').trim();
+            const titleB = (b.title || '无标题').trim();
+            return getPinyin(titleA).localeCompare(getPinyin(titleB), 'en', { sensitivity: 'base', numeric: true });
+        });
+
+        const groupMap = new Map();
+        for (const note of sorted) {
+            const title = (note.title || '无标题').trim();
+            const firstLetter = getPinyin(title).charAt(0).toUpperCase();
+            const letter = /^[A-Z]$/.test(firstLetter) ? firstLetter : '#';
+            if (!groupMap.has(letter)) {
+                groupMap.set(letter, []);
+            }
+            groupMap.get(letter).push(note);
+        }
+
+        // 转换为数组并排序（A-Z 在前，# 组在最后）
+        const groups = Array.from(groupMap.entries())
+            .sort(([letterA], [letterB]) => {
+                if (letterA === '#') return 1;
+                if (letterB === '#') return -1;
+                return letterA.localeCompare(letterB);
+            })
+            .map(([letter, notes]) => ({ letter, notes }));
+
+        return { groups };
     }
 
     /**

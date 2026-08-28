@@ -27,6 +27,7 @@ const panelData = reactive({
   search: { query: '', results: [] },
   tags: { tags: [], tagCounts: {}, tagNotes: {}, untaggedNotes: [] },
   archive: { years: [] },
+  pages: { groups: [] },
   recent: { notes: [] },
   outline: { headings: [], content: '' },
   versions: { versions: [], currentVersion: 0, isEditing: false, isTrashed: false, noteId: null },

@@ -32,6 +32,13 @@ const DEFAULT_PANELS = {
     component: () => import('./panels/ArchivePanel.vue'),
     defaultVisible: true
   },
+  pages: {
+    id: 'pages',
+    label: '所有页面',
+    icon: 'fas fa-layer-group',
+    component: () => import('./panels/AllPagesPanel.vue'),
+    defaultVisible: true
+  },
   recent: {
     id: 'recent',
     label: '最近文件',
