@@ -283,7 +283,7 @@ export class NoteTagCoordinator {
      * @param {Object} config 配置对象
      */
     setVisibilityFromConfig(config) {
-        if (config && config.sidebarPanels) {
+        if (config && (config.sidebarPanels || config.sidebarPanelsOrder)) {
             setVisibilityFromConfig(config);
         }
     }

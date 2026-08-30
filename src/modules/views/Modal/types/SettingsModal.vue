@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, computed, watch, ref, onMounted, onUnmounted } from 'vue'
-import { getAllPanels, getVisibilitySettings, isPanelVisible } from '../../LeftSidebar/panelRegistry.js'
+import { getAllPanels, getVisibilitySettings, isPanelVisible, getDefaultPanelOrder, getDefaultVisibilitySettings } from '../../LeftSidebar/panelRegistry.js'
 
 const props = defineProps({
   modal: { type: Object, required: true }
@@ -26,8 +26,45 @@ function scrollToSection(sectionId) {
 }
 
 // 面板可见性临时设置 - 仅在点击应用后生效
-const availablePanels = getAllPanels()
+const availablePanels = ref(getAllPanels())
 const tempPanelVisibility = reactive({ ...getVisibilitySettings() })
+
+// 面板拖拽排序状态
+const dragIndex = ref(null)
+const dragOverIndex = ref(null)
+
+function handleDragStart(index, event) {
+  dragIndex.value = index
+  event.dataTransfer.effectAllowed = 'move'
+}
+
+function handleDragOver(index, event) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+}
+
+function handleDrop(index) {
+  if (dragIndex.value === null || dragIndex.value === index) return
+  const list = [...availablePanels.value]
+  const [moved] = list.splice(dragIndex.value, 1)
+  list.splice(index, 0, moved)
+  availablePanels.value = list
+}
+
+function handleDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+// 恢复面板默认顺序与默认可见性
+function handleRestorePanelDefaults() {
+  const panelMap = new Map(availablePanels.value.map(p => [p.id, p]))
+  availablePanels.value = getDefaultPanelOrder()
+    .map(id => panelMap.get(id))
+    .filter(Boolean)
+  Object.assign(tempPanelVisibility, getDefaultVisibilitySettings())
+}
 
 // 字体样式设置
 const fontOptions = [
@@ -86,6 +123,7 @@ function handleCancel() {
 async function handleApply() {
   // 依次保存所有设置，确保每个都完成后再执行下一个
   await window.electronAPI.setConfig('sidebarPanels', { ...tempPanelVisibility })
+  await window.electronAPI.setConfig('sidebarPanelsOrder', availablePanels.value.map(p => p.id))
   await window.electronAPI.setConfig('editorStyle', { ...tempEditorStyle })
   await window.electronAPI.setConfig('theme', tempTheme.value)
   await window.electronAPI.applyConfigAndReload('dataRootPath', props.modal.tempDataRootPath)
@@ -209,15 +247,30 @@ onUnmounted(() => {
         </div>
         <div v-else class="settings-loading">加载中...</div>
 
-        <!-- 侧边栏面板可见性设置 -->
+        <!-- 侧边栏面板可见性与顺序设置 -->
         <div id="settings-panels" class="settings-item settings-panels-item">
-          <label class="settings-label">侧边栏面板</label>
+          <div class="panels-header">
+            <label class="settings-label">侧边栏面板</label>
+            <button class="btn btn-restore-small" title="恢复默认" @click="handleRestorePanelDefaults">
+              <i class="fas fa-undo"></i> 恢复默认
+            </button>
+          </div>
           <div class="settings-toggles">
                       <div
-              v-for="panel in availablePanels"
+              v-for="(panel, index) in availablePanels"
               :key="panel.id"
-              class="settings-toggle-row"
-              :class="{ 'cannot-hide-row': panel.cannotHide }"
+              class="settings-toggle-row draggable-row"
+              :class="{
+                'cannot-hide-row': panel.cannotHide,
+                'dragging': dragIndex === index,
+                'drag-over': dragOverIndex === index && dragIndex !== index && dragIndex !== null
+              }"
+              draggable="true"
+              @dragstart="handleDragStart(index, $event)"
+              @dragover="handleDragOver(index, $event)"
+              @drop="handleDrop(index)"
+              @dragenter.prevent
+              @dragend="handleDragEnd"
             >
               <span class="toggle-label">
                 <i :class="panel.icon"></i>
@@ -499,6 +552,40 @@ onUnmounted(() => {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--modal-border);
+}
+
+.panels-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.panels-header .settings-label {
+  margin-bottom: 0;
+}
+
+/* 整行可拖拽 */
+.settings-toggle-row.draggable-row {
+  cursor: grab;
+}
+
+.settings-toggle-row.draggable-row:active {
+  cursor: grabbing;
+}
+
+/* 开关区域保持指针光标 */
+.draggable-row .toggle-switch {
+  cursor: pointer;
+}
+
+.settings-toggle-row.dragging {
+  opacity: 0.4;
+}
+
+/* 拖拽悬停时在下方显示插入位置指示线 */
+.settings-toggle-row.drag-over {
+  box-shadow: 0 2px 0 var(--accent);
 }
 
 .settings-toggles {

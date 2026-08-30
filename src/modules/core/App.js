@@ -82,7 +82,7 @@ export class App {
         try {
             const config = await window.electronAPI.getConfig();
             if (config) {
-                if (config.sidebarPanels) {
+                if (config.sidebarPanels || config.sidebarPanelsOrder) {
                     this.noteTagCoordinator.setVisibilityFromConfig(config);
                 }
                 if (config.editorStyle) {

@@ -5,7 +5,7 @@
  * The sidebar discovers and renders registered panels dynamically.
  * Visibility settings are synced with config/settings.json.
  */
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 
 // Default panel definitions
 const DEFAULT_PANELS = {
@@ -76,6 +76,41 @@ const panelRegistry = new Map()
 // Visibility state (synced with settings) - 使用 Vue reactive 以支持响应式更新
 const panelVisibility = reactive({})
 
+// 面板显示顺序（synced with settings）- 默认与注册顺序一致
+const panelOrder = ref(Object.keys(DEFAULT_PANELS))
+
+/**
+ * 应用保存的面板顺序
+ * 过滤无效 ID，并将在保存顺序之后新增注册的面板追加到末尾
+ * @param {Array<string>} order 面板 ID 数组
+ */
+function applyPanelOrder(order) {
+  if (!Array.isArray(order)) return
+  const valid = order.filter(id => panelRegistry.has(id))
+  const missing = Array.from(panelRegistry.keys()).filter(id => !valid.includes(id))
+  panelOrder.value = [...valid, ...missing]
+}
+
+/**
+ * 获取默认面板顺序
+ * @returns {Array<string>} 面板 ID 数组
+ */
+function getDefaultPanelOrder() {
+  return Object.keys(DEFAULT_PANELS)
+}
+
+/**
+ * 获取默认面板可见性设置
+ * @returns {Object} 面板ID到默认可见性的映射
+ */
+function getDefaultVisibilitySettings() {
+  const settings = {}
+  for (const [id, definition] of Object.entries(DEFAULT_PANELS)) {
+    settings[id] = definition.defaultVisible
+  }
+  return settings
+}
+
 // Initialize registry with default panels
 function initializeRegistry() {
   for (const [id, definition] of Object.entries(DEFAULT_PANELS)) {
@@ -117,11 +152,13 @@ function unregisterPanel(panelId) {
 }
 
 /**
- * Get all registered panels
+ * Get all registered panels (按当前显示顺序)
  * @returns {Array} Array of panel definitions
  */
 function getAllPanels() {
-  return Array.from(panelRegistry.values())
+  return panelOrder.value
+    .map(id => panelRegistry.get(id))
+    .filter(Boolean)
 }
 
 /**
@@ -168,7 +205,7 @@ function getVisibilitySettings() {
 }
 
 /**
- * Set visibility from config/settings
+ * Set visibility and order from config/settings
  * @param {Object} config - Settings object from ConfigManager
  */
 function setVisibilityFromConfig(config) {
@@ -176,6 +213,9 @@ function setVisibilityFromConfig(config) {
     for (const [id, visible] of Object.entries(config.sidebarPanels)) {
       panelVisibility[id] = visible
     }
+  }
+  if (config && config.sidebarPanelsOrder) {
+    applyPanelOrder(config.sidebarPanelsOrder)
   }
 }
 
@@ -203,5 +243,8 @@ export {
   setPanelVisibility,
   getVisibilitySettings,
   setVisibilityFromConfig,
+  applyPanelOrder,
+  getDefaultPanelOrder,
+  getDefaultVisibilitySettings,
   DEFAULT_PANELS
 }
