@@ -32,6 +32,7 @@ export class App {
         // 4. 创建协调器层（仅依赖服务层，不依赖控制器，消除循环依赖）
         this.noteTagCoordinator = new NoteTagCoordinator(
             this.noteService,
+            this.stickyService,
             this.tagService,
             this.uiManager
         );

@@ -82,7 +82,11 @@ function formatNoteDate(date) {
 
       <div class="note-content">
         <h3 class="note-title">{{ note.title || '无标题' }}</h3>
-        <p class="note-excerpt">{{ note.excerpt || '无摘要' }}</p>
+        <div v-if="note.pageType === 'sticky'" class="sticky-stats">
+          <span class="sticky-stat-row"><span class="sticky-stat-dot sticky-stat-dot--active"></span>活跃便签数量：<span class="sticky-stat-num sticky-stat-num--active">{{ note.stickyStats?.active ?? 0 }}</span></span>
+          <span class="sticky-stat-row"><span class="sticky-stat-dot sticky-stat-dot--archived"></span>归档便签数量：<span class="sticky-stat-num sticky-stat-num--archived">{{ note.stickyStats?.archived ?? 0 }}</span></span>
+        </div>
+        <p v-else class="note-excerpt">{{ note.excerpt }}</p>
         <div v-if="note.tagsData && note.tagsData.length > 0" class="note-tags">
           <span
             v-for="tag in note.tagsData"
@@ -242,6 +246,59 @@ function formatNoteDate(date) {
 
 .note-card.expanded .note-content {
     transform: translateY(-2px);
+}
+
+/* ---------- 便签页卡片（仅内容区分，样式与笔记页一致） ---------- */
+.sticky-stats {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--note-card-excerpt-color);
+    line-height: 1.5;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sticky-stat-row {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sticky-stat-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.sticky-stat-dot--active {
+    background: #4299e1; /* 蓝 */
+}
+
+.sticky-stat-dot--archived {
+    background: #38b2ac; /* 青绿 */
+}
+
+/* 数字使用等宽字体，暗示会动态更新 */
+.sticky-stat-num {
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+    font-feature-settings: 'tnum' 1;
+    font-weight: 600;
+    margin-left: 2px;
+}
+
+.sticky-stat-num--active {
+    color: #4299e1;
+}
+
+.sticky-stat-num--archived {
+    color: #38b2ac;
 }
 
 /* ---------- 删除按钮 ---------- */

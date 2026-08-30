@@ -5,8 +5,9 @@
 import { setVisibilityFromConfig } from '../views/LeftSidebar/panelRegistry.js';
 
 export class NoteTagCoordinator {
-    constructor(noteService, tagService, uiManager) {
+    constructor(noteService, stickyService, tagService, uiManager) {
         this.noteService = noteService;
+        this.stickyService = stickyService;
         this.tagService = tagService;
         this.uiManager = uiManager;
         this.lastSearchQuery = ''; // 保存最近一次搜索关键词用于热更新
@@ -259,6 +260,29 @@ export class NoteTagCoordinator {
     async enrichNotesWithTags(notes) {
         const allTags = await this.tagService.getAllTags();
         const tagMap = new Map(allTags.map(tag => [tag.id, tag]));
+
+        // 便签页统计：并行获取便签列表与已归档列表
+        // 注意：getStickies 返回的是全部便签（含已归档），活跃数需按 archivedAt 过滤
+        if (this.stickyService) {
+            const stickyPages = notes.filter(n => n.pageType === 'sticky');
+            await Promise.all(stickyPages.map(async (note) => {
+                try {
+                    const [allStickies, archived] = await Promise.all([
+                        this.stickyService.getStickies(note.id),
+                        this.stickyService.getArchivedStickies(note.id)
+                    ]);
+                    const all = Array.isArray(allStickies) ? allStickies : [];
+                    note.stickyStats = {
+                        active: all.filter(s => !s.archivedAt).length,
+                        archived: Array.isArray(archived) ? archived.length : 0
+                    };
+                } catch (err) {
+                    console.warn(`[NoteTagCoordinator] 获取便签页 ${note.id} 统计失败:`, err);
+                    note.stickyStats = { active: 0, archived: 0 };
+                }
+            }));
+        }
+
         for (const note of notes) {
             if (Array.isArray(note.tags) && note.tags.length > 0) {
                 note.tagsData = note.tags
