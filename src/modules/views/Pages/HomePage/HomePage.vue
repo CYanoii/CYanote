@@ -31,6 +31,18 @@ function handleSearchClick() {
 function handleNewNote() {
   window.eventBus.emit(EventTypes.NOTE.CREATE)
 }
+
+// 视图切换：notes = 所有页面卡片，graph = 引用图谱
+const activeView = ref('notes')
+const VIEW_CONFIG = {
+  notes: { title: '页面卡片', icon: 'fas fa-columns' },
+  graph: { title: '引用图谱', icon: 'fas fa-project-diagram' }
+}
+const activeViewTitle = computed(() => VIEW_CONFIG[activeView.value].title)
+
+function switchView(view) {
+  activeView.value = view
+}
 </script>
 
 <template>
@@ -59,16 +71,35 @@ function handleNewNote() {
     <!-- 标签筛选栏 -->
     <TagFilter class="tag-filter-wrapper" />
 
-    <!-- 笔记列表 -->
+    <!-- 内容区：所有页面卡片 / 引用图谱 切换 -->
     <div class="all-notes">
-      <h2>
-        <i class="fas fa-columns"></i> 所有页面
-      </h2>
-      <NoteList class="notes-grid-wrapper" />
+      <div class="view-header">
+        <h2>
+          <i :class="VIEW_CONFIG[activeView].icon"></i> {{ activeViewTitle }}
+        </h2>
+        <div class="view-switcher">
+          <button
+            class="view-switch-btn"
+            :class="{ active: activeView === 'notes' }"
+            title="页面卡片"
+            @click="switchView('notes')"
+          >
+            <i class="fas fa-columns"></i>
+          </button>
+          <button
+            class="view-switch-btn"
+            :class="{ active: activeView === 'graph' }"
+            title="引用图谱"
+            @click="switchView('graph')"
+          >
+            <i class="fas fa-project-diagram"></i>
+          </button>
+        </div>
+      </div>
+      <NoteList v-show="activeView === 'notes'" class="notes-grid-wrapper" />
+      <!-- 引用图谱：v-if 保证切到图谱时才挂载渲染，避免隐藏时 svg 尺寸为 0 -->
+      <ReferenceGraph v-if="activeView === 'graph'" :notes="notes" />
     </div>
-
-    <!-- 引用图谱 -->
-    <ReferenceGraph :notes="notes" />
   </div>
 </template>
 
@@ -143,8 +174,15 @@ function handleNewNote() {
   transform: scale(0.95);
 }
 
-.all-notes h2 {
+.view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 20px;
+}
+
+.all-notes h2 {
+  margin: 0;
   color: var(--home-title-color);
   font-weight: 600;
 }
@@ -152,5 +190,40 @@ function handleNewNote() {
 .all-notes h2 i {
   margin-right: 10px;
   color: var(--accent);
+}
+
+/* 视图切换按钮组 */
+.view-switcher {
+  display: flex;
+  gap: 4px;
+  background: var(--sidebar-content-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.view-switch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.view-switch-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background: var(--sidebar-card-hover-bg);
+}
+
+.view-switch-btn.active {
+  background: var(--accent);
+  color: #fff;
 }
 </style>

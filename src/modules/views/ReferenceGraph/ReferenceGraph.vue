@@ -230,9 +230,6 @@ onUnmounted(() => {
 
 <template>
   <div class="reference-graph-panel">
-    <div class="graph-header">
-      <span class="graph-title">引用图谱</span>
-    </div>
     <svg ref="svgRef" class="graph-svg"></svg>
     <div v-if="!notes.length || notes.every(n => !n.references || n.references.length === 0)" class="graph-empty">
       暂无引用数据
@@ -246,7 +243,6 @@ onUnmounted(() => {
   width: 100%;
   aspect-ratio: 3 / 2;
   min-height: 300px;
-  margin-top: 20px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   overflow: hidden;
@@ -254,21 +250,9 @@ onUnmounted(() => {
   position: relative;
 }
 
-.graph-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--panel-border);
-  background: var(--sidebar-content-bg);
-}
-
-.graph-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 .graph-svg {
   width: 100%;
-  height: calc(100% - 36px);
+  height: 100%;
 }
 
 .graph-empty {
