@@ -362,6 +362,29 @@ async function initVditor(noteId, container, noteData) {
     }
   }
 
+  // 恢复顶部栏：编辑器内容滚动到顶后，继续向上滚动时触发
+  function bindScrollRecovery(container, noteId) {
+    container.addEventListener('wheel', (e) => {
+      if (e.deltaY >= 0) return
+      const editorEl = document.getElementById(`note-${noteId}`)
+      if (!editorEl || !editorEl.classList.contains('editor-focused')) return
+      // 从事件目标向上找到实际处理滚动的元素，仅在它已滚动到顶时恢复
+      let el = e.target
+      while (el && el !== container) {
+        if (el.scrollHeight > el.clientHeight + 1) {
+          const style = getComputedStyle(el)
+          if (/(auto|scroll)/.test(style.overflowY)) {
+            if (el.scrollTop <= 0) {
+              handleRecovery(noteId)
+            }
+            return
+          }
+        }
+        el = el.parentElement
+      }
+    }, { passive: true })
+  }
+
   if (noteData.status === 'trashed' || noteData.editStatus === 'published') {
     // 只读模式：创建编辑器后点击预览按钮
     const vditor = new Vditor(container, {
@@ -428,6 +451,8 @@ async function initVditor(noteId, container, noteData) {
           if (previewBtn) previewBtn.click()
           toolbar.style.display = 'none'
         }
+        // 滚动到顶后继续向上滚动时恢复顶部栏
+        bindScrollRecovery(container, noteId)
         // 点击内容区域时隐藏顶部栏
         container.addEventListener('click', (e) => {
           if (e.target.closest('.vditor-content')) {
@@ -614,6 +639,9 @@ async function initVditor(noteId, container, noteData) {
       applyEditorStyleToVditor(container)
       // 隐藏工具栏末尾的浏览/全屏/恢复顶部栏按钮 + 末位分隔线
       hideToolbarEndItems(container.querySelector('.vditor-toolbar'))
+
+      // 滚动到顶后继续向上滚动时恢复顶部栏
+      bindScrollRecovery(container, noteId)
 
       // 点击 Vditor 编辑区域时隐藏顶部栏
       container.addEventListener('click', (e) => {
@@ -1071,16 +1099,6 @@ onMounted(() => {
 
   <!-- 功能按钮组（圆形图标，仅图标） -->
   <div class="action-buttons-group">
-    <!-- 恢复顶部栏：清除 editor-focused，恢复标题/摘要/标签栏可见 -->
-    <div
-      v-if="activeNoteId && isNotePage(state.editors.get(activeNoteId)?.noteData)"
-      class="action-btn recovery-btn"
-      @click="handleRecovery(activeNoteId)"
-      title="恢复顶部栏"
-    >
-      <i class="fas fa-arrow-down"></i>
-    </div>
-
     <!-- 发布态：恢复编辑按钮 -->
     <div
       v-if="activeNoteId && isNotePage(state.editors.get(activeNoteId)?.noteData) && isPublished(state.editors.get(activeNoteId)?.noteData)"
