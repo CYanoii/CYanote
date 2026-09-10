@@ -189,6 +189,8 @@ function formatNoteDate(date) {
     font-size: 13px;
     color: var(--note-card-excerpt-color);
     line-height: 1.5;
+    /* 固定为两行高度，防止 flex: 1 拉伸容器导致露出第三行顶部 */
+    max-height: calc(1.5em * 2);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -209,6 +211,8 @@ function formatNoteDate(date) {
     font-size: 12px;
     color: var(--note-card-meta-color);
     flex-shrink: 0;
+    /* 摘要被 max-height 限制后不再撑满剩余空间，靠它将底部信息推到卡片底部 */
+    margin-top: auto;
 }
 
 .note-meta-expand {
@@ -238,6 +242,7 @@ function formatNoteDate(date) {
     -webkit-line-clamp: unset;
     overflow: visible;
     display: block;
+    max-height: none;
 }
 
 .note-card.expanded .note-tags {
