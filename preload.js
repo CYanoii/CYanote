@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 资源文件操作
   saveAsset: (noteId, fileName, fileData) => ipcRenderer.invoke('notes:saveAsset', noteId, fileName, fileData),
+  // 个人资料资源（头像 / 打赏二维码）
+  getProfileAssets: () => ipcRenderer.invoke('assets:getProfile'),
 
   // 发布/版本管理
   publishNote: (noteId, versionNote) => ipcRenderer.invoke('notes:publish', noteId, versionNote),

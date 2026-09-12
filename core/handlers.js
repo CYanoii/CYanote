@@ -188,6 +188,30 @@ async function setupIpcHandlers() {
     return await notesManager.saveAsset(noteId, fileName, fileData);
   });
 
+  // ===== 个人资料资源 =====
+  // 存储结构：<项目根目录>/assets/profile/avatar.{png|jpg|jpeg|webp} 作者头像
+  //                         <项目根目录>/assets/profile/donate-qr.{png|jpg|jpeg|webp} 打赏二维码
+  ipcMain.handle('assets:getProfile', async () => {
+    const profileDir = path.join(__dirname, '..', 'assets', 'profile');
+
+    const result = { avatar: null, donateQr: null };
+    const exts = ['png', 'jpg', 'jpeg', 'webp'];
+    const mimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+
+    for (const [key, baseName] of Object.entries({ avatar: 'avatar', donateQr: 'donate-qr' })) {
+      for (const ext of exts) {
+        try {
+          const buf = await fs.readFile(path.join(profileDir, `${baseName}.${ext}`));
+          result[key] = `data:${mimes[ext]};base64,${buf.toString('base64')}`;
+          break;
+        } catch {
+          // 该扩展名不存在，尝试下一个
+        }
+      }
+    }
+    return result;
+  });
+
   // ===== 标签操作 =====
   // 获取所有标签
   ipcMain.handle('tags:getAll', async () => {
