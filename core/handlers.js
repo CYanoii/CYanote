@@ -8,13 +8,15 @@ const NotesManager = require('./NotesManager');
 const TagsManager = require('./TagsManager');
 const ConfigManager = require('./ConfigManager');
 const StickyManager = require('./StickyManager');
+const QuickNoteManager = require('./QuickNoteManager');
 
 let notesManager;
 let tagsManager;
 let configManager;
 let stickyManager;
+let quickNoteManager;
 
-async function setupIpcHandlers() {
+async function setupIpcHandlers(options = {}) {
   // 初始化配置管理器
   configManager = new ConfigManager();
   await configManager.initialize();
@@ -28,6 +30,33 @@ async function setupIpcHandlers() {
 
   await notesManager.initialize();
   await tagsManager.initialize();
+
+  // 速记小窗管理器（只管窗口与全局快捷键）
+  quickNoteManager = new QuickNoteManager({
+    isDev: !!options.isDev
+  });
+
+  // 业务编排：Manager 发事件，handlers 串接 NotesManager / ConfigManager
+  quickNoteManager.on('save', async (text) => {
+    const content = (text || '').trim();
+    if (!content) return false;
+    const metadata = await notesManager.createNote('速记', 'note');
+    const excerpt = content.replace(/\s+/g, ' ').slice(0, 50);
+    await notesManager.updateNote(metadata.id, { excerpt, content });
+    if (options.getMainWindow) {
+      const mainWindow = options.getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('quicknote:saved', metadata.id);
+      }
+    }
+    return true;
+  });
+
+  quickNoteManager.on('hotkey-change', async (accelerator) => {
+    await configManager.set('quickNoteHotkey', accelerator);
+  });
+
+  quickNoteManager.initialize();
 
   // ===== 配置操作 =====
   ipcMain.handle('config:get', async () => {
@@ -274,6 +303,39 @@ async function setupIpcHandlers() {
   // 获取已归档便签
   ipcMain.handle('stickies:getArchived', async (event, stickyPageId) => {
     return await stickyManager.getArchivedStickies(stickyPageId);
+  });
+
+  // ===== 速记小窗 =====
+  // 获取草稿（关闭小窗后内容仍保留）
+  ipcMain.handle('quicknote:getDraft', () => {
+    return quickNoteManager.getDraft();
+  });
+
+  // 同步草稿到主进程内存
+  ipcMain.handle('quicknote:setDraft', (event, text) => {
+    quickNoteManager.setDraft(text);
+    return true;
+  });
+
+  // 保存速记为笔记（标题「速记」，摘要为内容前 50 字，正文为记录内容）
+  ipcMain.handle('quicknote:save', async (event, text) => {
+    return await quickNoteManager.requestSave(text);
+  });
+
+  // 关闭小窗（实际是隐藏，保留内容）
+  ipcMain.handle('quicknote:close', () => {
+    quickNoteManager.hide();
+    return true;
+  });
+
+  // 获取当前速记快捷键
+  ipcMain.handle('quicknote:getHotkey', () => {
+    return quickNoteManager.getHotkey();
+  });
+
+  // 修改速记快捷键，返回是否注册成功（Manager 内部失败回退，配置由 hotkey-change 事件写入）
+  ipcMain.handle('quicknote:setHotkey', (_event, accelerator) => {
+    return quickNoteManager.setHotkey(accelerator);
   });
 
 // ===== 窗口控制 =====

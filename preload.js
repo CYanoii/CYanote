@@ -36,6 +36,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 个人资料资源（头像 / 打赏二维码）
   getProfileAssets: () => ipcRenderer.invoke('assets:getProfile'),
 
+  // 速记小窗
+  quickNoteGetDraft: () => ipcRenderer.invoke('quicknote:getDraft'),
+  quickNoteSetDraft: (text) => ipcRenderer.invoke('quicknote:setDraft', text),
+  quickNoteSave: (text) => ipcRenderer.invoke('quicknote:save', text),
+  quickNoteClose: () => ipcRenderer.invoke('quicknote:close'),
+  getQuickNoteHotkey: () => ipcRenderer.invoke('quicknote:getHotkey'),
+  setQuickNoteHotkey: (accelerator) => ipcRenderer.invoke('quicknote:setHotkey', accelerator),
+  onQuickNoteSaved: (callback) => {
+    ipcRenderer.on('quicknote:saved', (event, noteId) => callback(noteId));
+  },
+
   // 发布/版本管理
   publishNote: (noteId, versionNote) => ipcRenderer.invoke('notes:publish', noteId, versionNote),
   abandonEdits: (noteId) => ipcRenderer.invoke('notes:abandonEdits', noteId),

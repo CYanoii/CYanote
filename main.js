@@ -1,7 +1,7 @@
 /**
  * Electron 主进程入口
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut } = require('electron');
 const path = require('path');
 const { setupIpcHandlers } = require('./core/handlers');
 
@@ -103,7 +103,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   // 注册 IPC 处理器
-  await setupIpcHandlers();
+  await setupIpcHandlers({ isDev, getMainWindow: () => mainWindow });
 
   // 创建窗口
   createWindow();
@@ -120,6 +120,11 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+});
+
+app.on('will-quit', () => {
+  // 注销全部全局快捷键（速记唤起等）
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

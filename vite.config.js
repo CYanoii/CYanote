@@ -14,6 +14,7 @@ export default defineConfig({
       input: {
         // 打包入口
         main: resolve(__dirname, 'src/index.html'),
+        quicknote: resolve(__dirname, 'src/quicknote.html'),
       },
       output: {
         // 固定输出文件名，方便 index.html 引用

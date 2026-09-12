@@ -128,6 +128,13 @@ export class App {
             this.noteController.switchToHome();
         }
 
+        // 6. 速记小窗保存笔记后刷新首页列表
+        if (window.electronAPI.onQuickNoteSaved) {
+            window.electronAPI.onQuickNoteSaved(() => {
+                this.noteController.loadAllNotes();
+            });
+        }
+
         console.log('App started');
     }
 

@@ -266,6 +266,7 @@ const outlineItems = [
   { id: 'data-path', label: '数据目录' },
   { id: 'panels', label: '侧边栏面板' },
   { id: 'editor-style', label: '编辑器样式' },
+  { id: 'quicknote', label: '速记' },
   { id: 'about', label: '关于作者' }
 ]
 const activeOutlineId = ref('theme')
@@ -406,6 +407,75 @@ const showDonate = ref(false)
 const showBrewing = ref(false)
 const pendingShaking = ref(false)
 
+// 速记快捷键
+const defaultHotkey = 'Alt+Shift+Q'
+const tempHotkey = ref(defaultHotkey)
+const hotkeyRecording = ref(false)
+const hotkeyError = ref('')
+
+// 监听 config 加载完成，更新速记快捷键
+watch(() => props.modal.config, (config) => {
+  if (config) {
+    tempHotkey.value = config.quickNoteHotkey || defaultHotkey
+  }
+}, { immediate: true })
+
+const hotkeyParts = computed(() => tempHotkey.value.split('+'))
+
+function startHotkeyRecording() {
+  if (hotkeyRecording.value) return
+  hotkeyRecording.value = true
+  hotkeyError.value = ''
+  window.addEventListener('keydown', captureHotkey, true)
+}
+
+function stopHotkeyRecording() {
+  hotkeyRecording.value = false
+  window.removeEventListener('keydown', captureHotkey, true)
+}
+
+// 录入新快捷键：Esc 取消，必须包含修饰键
+async function captureHotkey(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') {
+    stopHotkeyRecording()
+    return
+  }
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+
+  const parts = []
+  if (e.ctrlKey) parts.push('Ctrl')
+  if (e.altKey) parts.push('Alt')
+  if (e.shiftKey) parts.push('Shift')
+  if (parts.length === 0) {
+    hotkeyError.value = '需包含 Ctrl / Alt / Shift 修饰键'
+    return
+  }
+  const main = e.key === ' ' ? 'Space' : (e.key.length === 1 ? e.key.toUpperCase() : e.key)
+  const accelerator = [...parts, main].join('+')
+
+  const ok = await window.electronAPI.setQuickNoteHotkey(accelerator)
+  if (ok) {
+    tempHotkey.value = accelerator
+  } else {
+    hotkeyError.value = '该快捷键被占用，换一个试试'
+  }
+  stopHotkeyRecording()
+}
+
+// 恢复默认快捷键
+async function handleRestoreHotkey() {
+  stopHotkeyRecording()
+  const ok = await window.electronAPI.setQuickNoteHotkey(defaultHotkey)
+  if (ok) {
+    tempHotkey.value = defaultHotkey
+    hotkeyError.value = ''
+  } else {
+    hotkeyError.value = '默认快捷键被占用，恢复失败'
+  }
+}
+
 // 个人资料资源：作者头像与打赏二维码（dataURL，空字符串表示未放置）
 const avatarUrl = ref('')
 const qrUrl = ref('')
@@ -449,7 +519,7 @@ function handleScroll() {
   if (!content) return
 
   const scrollTop = content.scrollTop
-  const sections = ['theme', 'data-path', 'panels', 'editor-style', 'about']
+  const sections = ['theme', 'data-path', 'panels', 'editor-style', 'quicknote', 'about']
 
   for (let i = sections.length - 1; i >= 0; i--) {
     const el = document.getElementById(`settings-${sections[i]}`)
@@ -474,6 +544,7 @@ onUnmounted(() => {
   if (content) {
     content.removeEventListener('scroll', handleScroll)
   }
+  window.removeEventListener('keydown', captureHotkey, true)
 })
 </script>
 
@@ -649,6 +720,36 @@ onUnmounted(() => {
                 >
                  <span class="style-value">{{ tempEditorStyle.paragraphSpacing }}px</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 速记设置 -->
+        <div id="settings-quicknote" class="settings-item settings-quicknote-item">
+          <div class="style-settings">
+            <div class="style-header">
+              <span class="style-section-title">速记</span>
+              <button class="btn btn-restore-small" title="恢复默认 Alt+Shift+Q" @click="handleRestoreHotkey">
+                <i class="fas fa-undo"></i> 恢复默认
+              </button>
+            </div>
+            <div class="style-row">
+              <span class="style-label">快捷键</span>
+              <div class="hotkey-group">
+                <div class="hotkey-keys">
+                  <kbd v-for="part in hotkeyParts" :key="part">{{ part }}</kbd>
+                </div>
+                <button
+                  class="settings-select-btn hotkey-edit-btn"
+                  :class="{ recording: hotkeyRecording }"
+                  @click="startHotkeyRecording"
+                >
+                  {{ hotkeyRecording ? '按下新快捷键…' : '修改' }}
+                </button>
+              </div>
+            </div>
+            <div class="hotkey-hint" :class="{ error: hotkeyError }">
+              {{ hotkeyError || '在任意界面按下快捷键唤起速记小窗，录入时按 Esc 取消' }}
             </div>
           </div>
         </div>
@@ -904,6 +1005,56 @@ onUnmounted(() => {
   background: var(--tag-filter-blocked-bg);
 }
 
+/* 速记快捷键 */
+.hotkey-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hotkey-keys {
+  display: flex;
+  gap: 6px;
+}
+
+.hotkey-keys kbd {
+  padding: 4px 10px;
+  border: 1px solid var(--modal-border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--tag-filter-item-bg);
+  color: var(--modal-text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.hotkey-edit-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.hotkey-edit-btn.recording {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  animation: hotkeyPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes hotkeyPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.hotkey-hint {
+  font-size: 12px;
+  color: var(--modal-text-muted);
+}
+
+.hotkey-hint.error {
+  color: var(--toast-error-color);
+}
+
 .settings-popover-footer {
   display: flex;
   justify-content: flex-end;
@@ -1075,6 +1226,12 @@ onUnmounted(() => {
 
 /* 编辑器样式设置 */
 .settings-editor-style-item {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--modal-border);
+}
+
+.settings-quicknote-item {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--modal-border);

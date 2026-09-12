@@ -23,6 +23,7 @@ class ConfigManager {
         dataRootPath: '',
         version: 1,
         theme: 'light',
+        quickNoteHotkey: 'Alt+Shift+Q',
         sidebarPanels: {
           search: true,
           tags: true,
