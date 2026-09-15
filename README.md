@@ -9,6 +9,10 @@
 - **回收站** - 删除笔记移入回收站，支持恢复或永久删除，误删可找回
 - **归档** - 按创建日期（年-月）分组归档展示笔记
 - **多页签管理** - 支持同时打开多个笔记，通过页签快速切换
+- **右侧副编辑区** - 从标签栏拖入笔记到副编辑区，与主编辑区并行查看/编辑，可折叠、可调宽度
+  - 折叠前自动将副区笔记转回主编辑区，未保存修改无缝衔接
+  - 覆盖副区内容时，旧笔记自动迁移到主编辑区
+  - 折叠状态、宽度、当前笔记均持久化到 `page-state.json`
 - **Markdown 编辑器** - 基于 Vditor 的 Markdown 编辑体验，支持即时渲染
 - **本地存储** - 笔记保存在本地文件系统，安全可控
 - **笔记列表** - 首页显示所有笔记列表，支持筛选
@@ -17,6 +21,7 @@
 - **Toast 消息提示** - 操作反馈友好
 - **Modal 模态框** - 输入提示/确认对话框/标签选择/设置浮出
 - **系统托盘** - 支持最小化到托盘，托盘菜单包含显示窗口/退出选项
+- **速记** - 后台快捷键唤出独立速记窗口，随时记录灵感
 - **笔记互链** - 支持 `[[笔记ID|标题]]` 语法在笔记间相互引用跳转
 - **引用列表** - 笔记页标签栏下方显示所有引用，支持点击跳转定位
 - **引用图谱** - 首页下方 D3.js 力导向有向图，可视化笔记引用关系
@@ -52,12 +57,15 @@ CYanote/
 │   ├── NotesManager.js     # 笔记管理核心逻辑（CRUD、索引、回收站、归档、搜索）
 │   ├── TagsManager.js      # 标签管理核心逻辑
 │   ├── ConfigManager.js    # 配置管理（数据路径、设置持久化）
+│   ├── QuickNoteManager.js # 速记窗口管理（独立 BrowserWindow、全局快捷键、托盘隐藏）
 │   └── handlers.js         # IPC 处理器注册（桥接主进程和渲染进程）
 │
 └── src/
     ├── index.html           # 主页面 HTML
     ├── index.css            # 全局样式
     ├── renderer.js          # 渲染进程入口（创建 Vue 容器、初始化 App）
+    ├── quicknote.html       # 速记窗口 HTML
+    └── quicknote.js         # 速记窗口入口
     │
     └── modules/
         ├── core/            # 核心模块
@@ -68,12 +76,12 @@ CYanote/
         ├── services/        # 数据服务层（纯数据操作，封装 IPC 调用）
         │   ├── NoteService.js       # 笔记数据访问 + 内存缓存管理
         │   ├── TagService.js        # 标签数据访问
-        │   └── PageStateService.js  # 页面状态（侧边栏/标签页）持久化
+        │   └── PageStateService.js  # 页面状态（侧边栏/副编辑区/标签页）持久化
         │
         ├── controllers/      # 控制器层（业务逻辑编排，接收 UI 事件）
-        │   ├── NoteController.js       # 笔记增删改查业务流程编排
+        │   ├── NoteController.js       # 笔记增删改查、副编辑区转移等业务流程编排
         │   ├── TagController.js        # 标签增删改查业务流程编排
-        │   └── PageStateController.js  # 页面状态恢复编排
+        │   └── PageStateController.js  # 页面状态恢复编排（含副编辑区状态）
         │
         ├── coordinators/     # 协调器层（处理跨领域交叉业务）
         │   └── NoteTagCoordinator.js   # 笔记与标签的交叉逻辑（搜索、绑定、批量操作）
@@ -84,15 +92,24 @@ CYanote/
         │   └── helpers.js     # 防抖、HTML 转义（防XSS）
         │
         └── views/            # 视图层（Vue SFC + 组合式函数）
-            ├── App.vue                    # Vue 根组件
-            ├── UIManager.js               # UI 管理器（代理各 composables 方法）
-            ├── Editor/
-            │   ├── Editor.vue            # 编辑器视图
-            │   ├── useEditor.js          # 编辑器组合式函数
-            │   └── components/
-            │       └── NoteSuggestionPopup.vue  # 笔记互链选择浮层
-            ├── HomePage/
-            │   └── HomePage.vue          # 首页视图
+            ├── App.vue                    # Vue 根组件（含副编辑区开关与浮空窗口控制条）
+            ├── UIManager.js               # UI 管理器（代理各 composables 方法，扇出到主/副编辑器）
+            ├── Pages/                     # 页面级视图
+            │   ├── index.js               # 页面模块导出
+            │   ├── NotePage/              # 笔记页（主区与副区共用，工厂模式注入仓库）
+            │   │   ├── NotePage.vue
+            │   │   └── useNotePage.js     # createNotePageStore() 工厂 + 模块单例
+            │   ├── StickyPage/            # 便签页
+            │   │   └── StickyPage.vue
+            │   ├── HomePage/              # 首页
+            │   │   └── HomePage.vue
+            │   └── WikiLink/              # 笔记互链浮层
+            │       └── NoteSuggestionPopup.vue
+            ├── SecondaryPane/             # 右侧副编辑区
+            │   ├── SecondaryPane.vue      # 副区视图（独立编辑器实例、拖入、宽度调整）
+            │   └── useSecondaryPane.js    # 副区组合式函数（独立 createNotePageStore 实例 + UI 状态）
+            ├── QuickNote/                 # 速记窗口（独立 BrowserWindow）
+            │   └── QuickNote.vue
             ├── LeftSidebar/
             │   ├── LeftSidebar.vue       # 左侧边栏组件
             │   ├── useLeftSidebar.js     # 左侧边栏组合式函数
@@ -103,7 +120,9 @@ CYanote/
             │       ├── SearchPanel.vue    # 搜索面板
             │       ├── TagsPanel.vue      # 标签面板
             │       ├── TrashPanel.vue     # 回收站面板
-            │       └── OutlinePanel.vue   # 大纲面板
+            │       ├── OutlinePanel.vue   # 大纲面板
+            │       ├── AllPagesPanel.vue  # 所有页面面板（按首字母排序）
+            │       └── VersionsPanel.vue  # 版本历史面板
             ├── Modal/
             │   ├── Modal.vue             # 模态框组件
             │   ├── ModalContainer.vue    # 模态框容器
@@ -117,15 +136,13 @@ CYanote/
             │   ├── NoteList.vue          # 笔记列表组件
             │   └── useNoteList.js        # 笔记列表组合式函数
             ├── TabBar/
-            │   ├── TabBar.vue            # 标签页栏组件
+            │   ├── TabBar.vue            # 标签页栏组件（含拖入副区支持）
             │   └── useTabBar.js          # 标签页栏组合式函数
             ├── TagFilter/
             │   ├── TagFilter.vue         # 标签筛选栏组件
             │   └── useTagFilter.js       # 标签筛选组合式函数
             ├── ReferenceGraph/
             │   └── ReferenceGraph.vue    # 引用有向图组件（D3.js 力导向图）
-            ├── TitleBar/
-            │   └── TitleBar.vue          # 标题栏组件（包含标签页）
             └── Toast/
                 ├── Toast.vue             # Toast 单个消息组件
                 ├── ToastContainer.vue    # Toast 容器组件
@@ -145,6 +162,7 @@ CYanote/
 | `core/NotesManager.js` | 笔记数据操作（创建/读取/更新/删除/回收站/归档/搜索/发布/版本回滚） |
 | `core/TagsManager.js` | 标签数据操作（创建/删除/列表/关联笔记/使用计数） |
 | `core/ConfigManager.js` | 配置管理（数据存储路径、设置持久化） |
+| `core/QuickNoteManager.js` | 速记窗口管理（独立 BrowserWindow、全局快捷键、托盘隐藏） |
 | `core/handlers.js` | IPC 通信处理器，暴露主进程功能给渲染进程 |
 
 #### 前端模块 (src/modules/)
@@ -185,18 +203,21 @@ CYanote/
 
 | 组件 | 组合式函数 | 职责 |
 |------|----------|------|
-| `App.vue` | - | Vue 根组件，挂载所有子组件 |
-| `UIManager.js` | - | UI 管理器，代理各 composables 方法，统一绑定事件 |
-| `Editor/` | `useEditor.js` | 编辑器（创建/切换/内容管理，使用 Vditor） |
-| `TabBar/` | `useTabBar.js` | 标签页栏（创建/切换/关闭/拖拽排序） |
+| `App.vue` | - | Vue 根组件，挂载所有子组件，含副编辑区开关与浮空窗口控制条 |
+| `UIManager.js` | - | UI 管理器，代理各 composables 方法，统一绑定事件，扇出更新到主/副编辑器 |
+| `Pages/NotePage/` | `useNotePage.js` | 笔记页（创建/切换/内容管理，使用 Vditor）—— **工厂模式**：导出 `createNotePageStore()` 供主区与副区分别创建独立实例 |
+| `Pages/StickyPage/` | - | 便签页 |
+| `Pages/HomePage/` | - | 首页视图 |
+| `Pages/WikiLink/` | - | 笔记互链选择浮层 |
+| `SecondaryPane/` | `useSecondaryPane.js` | 右侧副编辑区（独立 `createNotePageStore()` 实例 + 折叠/宽度/当前笔记状态；从标签栏拖入笔记，可调宽度，自动持久化） |
+| `QuickNote/` | - | 速记窗口视图（独立 BrowserWindow，后台快捷键唤出） |
+| `TabBar/` | `useTabBar.js` | 标签页栏（创建/切换/关闭/拖拽排序，支持拖入副区） |
 | `NoteList/` | `useNoteList.js` | 笔记列表组件 |
 | `TagFilter/` | `useTagFilter.js` | 标签筛选栏 |
 | `ReferenceGraph/` | - | 引用有向图（D3.js 力导向图） |
-| `LeftSidebar/` | `useLeftSidebar.js` | 左侧边栏 + 各功能面板（搜索/标签/归档/回收站/大纲） |
+| `LeftSidebar/` | `useLeftSidebar.js` | 左侧边栏 + 各功能面板（搜索/标签/归档/回收站/大纲/所有页面/版本历史） |
 | `Modal/` | `useModal.js` | 模态框（confirm/prompt/标签选择/设置） |
 | `Toast/` | `useToast.js` | Toast 消息提示 |
-| `TitleBar/` | - | 窗口标题栏（包含标签页） |
-| `HomePage/` | - | 首页视图 |
 
 **工具层 (utils/)**
 
@@ -226,6 +247,22 @@ UI (Vue) → EventBus → Controller → Coordinator → Service → IPC → Man
 2. Controller 接收事件，调用 Coordinator
 3. Coordinator 编排 Service 层数据操作
 4. Coordinator 返回结果给 Controller，Controller 更新 UI
+
+### 副编辑区架构
+
+右侧副编辑区（SecondaryPane）与主编辑区共享 `NotePage` 组件，但持有**独立的编辑器仓库实例**，避免状态相互污染：
+
+- `useNotePage.js` 导出工厂 `createNotePageStore()`：每次调用都返回新的 `state.editors` Map 等响应式状态
+- `useSecondaryPane.js` 在内部调用一次 `createNotePageStore()`，将得到的编辑器实例与副区的 UI 状态（`isCollapsed` / `width` / `noteId`）组合后导出
+- `NotePage.vue` 接收可选 `store` prop，未传入时回退到模块单例 `useNotePage()`（向后兼容）；副区传入自己的独立实例
+
+**共享数据**：副区笔记同时注册到 `noteService.openNotes`，与编辑器仓库共享同一 `noteData` 引用，确保标题/摘要/正文修改走统一的保存路径。
+
+**状态转移**：
+- 标签 → 副区：从标签栏拖入；旧副区笔记经 `transferPaneNoteToMain()` 迁回主区
+- 副区 → 标签：折叠副区时自动调用 `transferPaneNoteToMain()`，复用共享引用，未保存修改无缝迁移
+
+**持久化**：`page-state.json` 中新增 `secondaryPane` 字段（`isCollapsed` / `width` / `noteId`），由 `PageStateController` 监听 `SECONDARY_PANE.*` 事件落盘；恢复时静默应用（`_applyState` 不触发事件），避免状态回写。
 
 ### 编码规范
 
@@ -303,3 +340,12 @@ npm run start
 - 边颜色透明度反映引用次数
 - 支持节点拖拽和画布拖动
 - 点击节点跳转打开对应笔记
+
+## 速记
+
+后台随时记录灵感的轻量窗口：
+
+- 主进程通过 `QuickNoteManager` 管理独立的 `BrowserWindow`（无边框、可隐藏到托盘）
+- 通过全局快捷键（默认在设置面板中可配置）唤出/隐藏速记窗口
+- 速记内容保存为便签页笔记，自动加入首页列表
+- 保存窗口位置/尺寸，跨会话恢复
