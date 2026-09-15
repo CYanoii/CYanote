@@ -363,6 +363,8 @@ async function initVditor(noteId, container, noteData) {
   }
 
   // 恢复顶部栏：编辑器内容滚动到顶后，继续向上滚动时触发
+  // 短笔记（内容不够长，不可滚动）时，wheel 不会落在任何可滚元素上，
+  // 因此事件目标若在 .vditor-content 内，无论是否可滚都视为"已到顶"并恢复
   function bindScrollRecovery(container, noteId) {
     container.addEventListener('wheel', (e) => {
       if (e.deltaY >= 0) return
@@ -370,6 +372,7 @@ async function initVditor(noteId, container, noteData) {
       if (!editorEl || !editorEl.classList.contains('editor-focused')) return
       // 从事件目标向上找到实际处理滚动的元素，仅在它已滚动到顶时恢复
       let el = e.target
+      let inVditorContent = e.target && e.target.closest && e.target.closest('.vditor-content')
       while (el && el !== container) {
         if (el.scrollHeight > el.clientHeight + 1) {
           const style = getComputedStyle(el)
@@ -381,6 +384,10 @@ async function initVditor(noteId, container, noteData) {
           }
         }
         el = el.parentElement
+      }
+      // 循环结束没找到可滚元素：短笔记不滚动，只要滚轮发生在内容区域就恢复
+      if (inVditorContent) {
+        handleRecovery(noteId)
       }
     }, { passive: true })
   }
