@@ -11,6 +11,7 @@ import { useNoteList } from './NoteList/useNoteList.js';
 import { useToast } from './Toast/useToast.js';
 import { useModal } from './Modal/useModal.js';
 import { useLeftSidebar } from './LeftSidebar/useLeftSidebar.js';
+import { useSecondaryPane } from './SecondaryPane/useSecondaryPane.js';
 
 export class UIManager {
     constructor(eventBus) {
@@ -24,6 +25,8 @@ export class UIManager {
         this.toast = useToast();
         this.modal = useModal();
         this.leftSidebar = useLeftSidebar();
+        // 右侧副编辑区：独立编辑器仓库
+        this.secondaryPane = useSecondaryPane();
     }
 
     /**
@@ -291,22 +294,54 @@ export class UIManager {
 
     editor_updateEditorTitle(noteId, newTitle) {
         this.editor.updateEditorTitle(noteId, newTitle);
+        // 扇出到副编辑区仓库（对不存在该笔记的仓库为 no-op，安全）
+        this.secondaryPane.editor.updateEditorTitle(noteId, newTitle);
     }
 
     editor_updateNoteTags(noteId, allTags, noteTagIds) {
         this.editor.updateNoteTags(noteId, allTags, noteTagIds);
+        this.secondaryPane.editor.updateNoteTags(noteId, allTags, noteTagIds);
     }
 
     editor_updateEditorContent(noteId, newContent) {
         this.editor.updateEditorContent(noteId, newContent);
+        this.secondaryPane.editor.updateEditorContent(noteId, newContent);
     }
 
     editor_updateNoteData(noteId, updates) {
         this.editor.updateNoteData(noteId, updates);
+        this.secondaryPane.editor.updateNoteData(noteId, updates);
     }
 
     editor_updateNoteReferences(noteId, references) {
         this.editor.updateNoteReferences(noteId, references);
+        this.secondaryPane.editor.updateNoteReferences(noteId, references);
+    }
+
+    // ========== 副编辑区方法 ==========
+
+    secondaryPane_setNote(noteData) {
+        this.secondaryPane.setNote(noteData);
+    }
+
+    secondaryPane_clearNote() {
+        this.secondaryPane.clearNote();
+    }
+
+    secondaryPane_getNoteId() {
+        return this.secondaryPane.getNoteId();
+    }
+
+    secondaryPane_collapse() {
+        this.secondaryPane.collapse();
+    }
+
+    secondaryPane_expand() {
+        this.secondaryPane.expand();
+    }
+
+    secondaryPane_setWidth(width) {
+        this.secondaryPane.setWidth(width);
     }
 
     editor_scrollToPosition(noteId, index) {

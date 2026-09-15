@@ -1,22 +1,21 @@
 /**
  * useNotePage - 笔记页面渲染的组合式函数
- * 使用单例模式确保状态在模块级别共享
  *
- * 注意：此处保留了 useEditor.js 中的核心状态管理逻辑，
- * 因为 NotePage 组件需要与 Editor 容器共享同一个状态。
- * Editor 容器负责管理编辑器的创建/销毁/切换，
- * NotePage 负责具体的笔记内容渲染。
+ * 工厂模式：导出 createNotePageStore() 用于创建独立仓库实例，
+ * 同时提供 useNotePage() 模块单例（向后兼容，避免修改所有现有调用方）。
  */
 import { reactive, computed } from 'vue'
 
-// 单例状态 - 模块级别共享
-const state = reactive({
-  activeNoteId: null,     // 当前激活的笔记ID
-  editors: new Map(),     // 存储笔记编辑器实例 {noteId: {noteData, vditor}}
-  isFocused: false        // 是否聚焦在编辑器内容区
-})
+/**
+ * 创建笔记编辑器仓库（可创建多个独立实例，供主区与副区分别持有）
+ */
+export function createNotePageStore() {
+  const state = reactive({
+    activeNoteId: null,     // 当前激活的笔记ID
+    editors: new Map(),     // 存储笔记编辑器实例 {noteId: {noteData, vditor}}
+    isFocused: false        // 是否聚焦在编辑器内容区
+  })
 
-export function useNotePage() {
   /**
    * 创建笔记编辑器
    * @param {Object} noteData 笔记数据
@@ -63,8 +62,6 @@ export function useNotePage() {
 
   /**
    * 更新编辑器标题
-   * @param {string|number} noteId 笔记ID
-   * @param {string} newTitle 新标题
    */
   function updateEditorTitle(noteId, newTitle) {
     const editor = state.editors.get(noteId)
@@ -75,12 +72,9 @@ export function useNotePage() {
 
   /**
    * 更新编辑器内容
-   * @param {string|number} noteId 笔记ID
-   * @param {string} newContent 新内容
    */
   function updateEditorContent(noteId, newContent) {
     const editor = state.editors.get(noteId)
-    // 检查 vditor 是否存在且完全初始化（有 lute 对象）
     if (editor && editor.vditor && editor.vditor.lute) {
       try {
         const currentValue = editor.vditor.getValue()
@@ -88,7 +82,6 @@ export function useNotePage() {
           editor.vditor.setValue(newContent)
         }
       } catch (e) {
-        // Vditor 方法调用失败，尝试直接更新 content
         console.warn('[useNotePage] Vditor update failed, updating content directly:', e)
         editor.noteData.content = newContent
       }
@@ -97,12 +90,6 @@ export function useNotePage() {
     }
   }
 
-  /**
-   * 更新笔记标签显示
-   * @param {string|number} noteId 笔记ID
-   * @param {Array} allTags 所有标签
-   * @param {Array} noteTagIds 笔记的标签ID数组
-   */
   function updateNoteTags(noteId, allTags, noteTagIds) {
     const editor = state.editors.get(noteId)
     if (editor) {
@@ -111,11 +98,6 @@ export function useNotePage() {
     }
   }
 
-  /**
-   * 更新笔记引用列表显示
-   * @param {string|number} noteId 笔记ID
-   * @param {Array} references 引用列表
-   */
   function updateNoteReferences(noteId, references) {
     const editor = state.editors.get(noteId)
     if (editor) {
@@ -123,11 +105,6 @@ export function useNotePage() {
     }
   }
 
-  /**
-   * 更新笔记数据（用于回滚等场景整体替换元数据）
-   * @param {string|number} noteId - 笔记ID
-   * @param {Object} updates - 要合并的字段
-   */
   function updateNoteData(noteId, updates) {
     const editor = state.editors.get(noteId)
     if (editor && editor.noteData) {
@@ -135,11 +112,6 @@ export function useNotePage() {
     }
   }
 
-  /**
-   * 设置 Vditor 实例
-   * @param {string|number} noteId 笔记ID
-   * @param {Object} vditor Vditor 实例
-   */
   function setVditor(noteId, vditor) {
     const editor = state.editors.get(noteId)
     if (editor) {
@@ -147,20 +119,11 @@ export function useNotePage() {
     }
   }
 
-  /**
-   * 获取 Vditor 实例
-   * @param {string|number} noteId 笔记ID
-   */
   function getVditor(noteId) {
     const editor = state.editors.get(noteId)
     return editor ? editor.vditor : null
   }
 
-  /**
-   * 滚动到文档指定标题
-   * @param {string|number} noteId 笔记ID
-   * @param {number} index 标题在列表中的索引
-   */
   function scrollToPosition(noteId, index) {
     const vditor = getVditor(noteId)
     if (!vditor) return
@@ -182,32 +145,18 @@ export function useNotePage() {
     }
   }
 
-  /**
-   * 设置聚焦状态
-   * @param {boolean} focused 是否聚焦
-   */
   function setFocused(focused) {
     state.isFocused = focused
   }
 
-  /**
-   * 获取当前激活的笔记ID
-   */
   function getActiveNoteId() {
     return state.activeNoteId
   }
 
-  /**
-   * 检查是否存在指定笔记的编辑器
-   * @param {string|number} noteId 笔记ID
-   */
   function hasEditor(noteId) {
     return state.editors.has(noteId)
   }
 
-  /**
-   * 获取编辑器列表
-   */
   function getEditors() {
     return Array.from(state.editors.entries()).map(([id, editor]) => ({
       id,
@@ -245,5 +194,18 @@ export function useNotePage() {
   }
 }
 
-// 导出单例状态供外部访问
-export const notePageState = state
+// 模块级单例：供主区使用（向后兼容，所有现有调用方无需改动）
+let _singleton = null
+export function useNotePage() {
+  if (!_singleton) {
+    _singleton = createNotePageStore()
+  }
+  return _singleton
+}
+
+// 向后兼容：旧导入 `notePageState` 的代码仍指向单例 state
+export const notePageState = new Proxy({}, {
+  get(_t, prop) {
+    return _singleton ? _singleton.state[prop] : undefined
+  }
+})

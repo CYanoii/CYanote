@@ -98,6 +98,15 @@ export const EventTypes = {
     ARCHIVE: 'sticky:archive',
     UNARCHIVE: 'sticky:unarchive',
     GET_ARCHIVED: 'sticky:getArchived'
+  },
+
+  // 右侧副编辑区事件
+  SECONDARY_PANE: {
+    SET_NOTE: 'secondaryPane:setNote',         // 拖入标签页到副区
+    CLEAR_NOTE: 'secondaryPane:clearNote',     // 关闭副区中的页面
+    COLLAPSE_CHANGE: 'secondaryPane:collapseChange',
+    WIDTH_CHANGE: 'secondaryPane:widthChange',
+    NOTE_CHANGE: 'secondaryPane:noteChange'    // 副区当前笔记 ID 变化（用于持久化）
   }
 
 }

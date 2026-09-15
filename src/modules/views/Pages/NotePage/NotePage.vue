@@ -22,6 +22,10 @@ function isNotePage(noteData) {
   return !isStickyPage(noteData)
 }
 
+// 支持外部传入编辑器仓库实例，使同一组件可复用于主区与右侧副编辑区
+// 未传入时回退到模块单例（向后兼容）
+const props = defineProps({ store: Object })
+const noteStore = props.store || useNotePage()
 const {
   state,
   activeNoteId,
@@ -37,7 +41,7 @@ const {
   setFocused,
   getActiveNoteId,
   getEditors
-} = useNotePage()
+} = noteStore
 
 // 获取笔记列表
 const editorList = computed(() => {
@@ -1356,7 +1360,8 @@ onMounted(() => {
 
 /* 功能按钮组 */
 .action-buttons-group {
-    position: fixed;
+    /* 锚定到 .editor-root（绝对定位），既适用于主区也适用于副编辑区容器 */
+    position: absolute;
     bottom: 20px;
     right: 20px;
     display: flex;

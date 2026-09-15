@@ -9,6 +9,11 @@ export class PageStateService {
                 isCollapsed: false,
                 width: 280
             },
+            secondaryPane: {
+                isCollapsed: true,
+                width: 360,
+                noteId: null
+            },
             openTabs: [],
             activeTabId: 'home'
         };

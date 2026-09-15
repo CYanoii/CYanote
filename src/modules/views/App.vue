@@ -1,11 +1,12 @@
 <script setup>
-import { createApp, onMounted, computed, ref } from 'vue'
+import { createApp, onMounted, computed, ref, watch } from 'vue'
 import ToastContainer from './Toast/ToastContainer.vue'
 import ModalContainer from './Modal/ModalContainer.vue'
 import LeftSidebar from './LeftSidebar/LeftSidebar.vue'
 import TabBar from './TabBar/TabBar.vue'
 import Editor from './Pages/NotePage/NotePage.vue'
 import HomePage from './Pages/HomePage/HomePage.vue'
+import SecondaryPane from './SecondaryPane/SecondaryPane.vue'
 import { useLeftSidebar } from './LeftSidebar/useLeftSidebar.js'
 import { useNotePage } from './Pages/NotePage/useNotePage.js'
 import { useTabBar } from './TabBar/useTabBar.js'
@@ -13,6 +14,7 @@ import { useTagFilter } from './TagFilter/useTagFilter.js'
 import { useNoteList } from './NoteList/useNoteList.js'
 import { useToast } from './Toast/useToast.js'
 import { useModal } from './Modal/useModal.js'
+import { useSecondaryPane } from './SecondaryPane/useSecondaryPane.js'
 import { EventTypes } from '../core/EventTypes.js'
 
 // 立即暴露 composable 实例到 window（早于 UIManager 构造函数调用）
@@ -23,6 +25,8 @@ window.tagFilterApi = useTagFilter()
 window.noteListApi = useNoteList()
 window.toastApi = useToast()
 window.modalApi = useModal()
+const secondaryPaneApi = useSecondaryPane()
+window.secondaryPaneApi = secondaryPaneApi
 
 // 新建页面下拉菜单状态
 const showPageTypeDropdown = ref(false)
@@ -109,6 +113,68 @@ onMounted(async () => {
 const handleMinimize = () => window.electronAPI.minimizeWindow()
 const handleMaximize = () => window.electronAPI.maximizeWindow()
 const handleClose = () => window.electronAPI.closeWindow()
+
+// 副编辑区折叠状态（用于开关按钮的高亮）
+const secondaryPaneCollapsed = ref(true)
+
+// 副编辑区按钮拖拽高亮（拖动标签经过按钮时变绿背景）
+const isSecondaryPaneDragOver = ref(false)
+let paneButtonDragCounter = 0
+function onPaneButtonDragEnter(event) {
+  if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('text/plain')) return
+  event.preventDefault()
+  // 只在从按钮外部进入时递增计数（避免子元素切换时计数只增不减导致离开后无法复位）
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    paneButtonDragCounter += 1
+    isSecondaryPaneDragOver.value = true
+  }
+}
+function onPaneButtonDragOver(event) {
+  if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('text/plain')) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+}
+function onPaneButtonDragLeave(event) {
+  // 只在离开到按钮外部时递减计数
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    paneButtonDragCounter = Math.max(0, paneButtonDragCounter - 1)
+    if (paneButtonDragCounter === 0) isSecondaryPaneDragOver.value = false
+  }
+}
+function onPaneButtonDrop(event) {
+  event.preventDefault()
+  isSecondaryPaneDragOver.value = false
+  paneButtonDragCounter = 0
+  const noteId = event.dataTransfer?.getData('text/plain')
+  if (!noteId || !window.eventBus) return
+  window.eventBus.emit(EventTypes.SECONDARY_PANE.SET_NOTE, noteId)
+}
+async function toggleSecondaryPane() {
+  // 若当前展开且副区有笔记：折叠前先把笔记转到主编辑区打开
+  const isExpanded = !secondaryPaneApi.getIsCollapsed()
+  const paneNoteId = secondaryPaneApi.getNoteId()
+  if (isExpanded && paneNoteId) {
+    try {
+      // 直接调用 transferPaneNoteToMain：复用共享引用，避免重新加载
+      if (window.app?.noteController?.transferPaneNoteToMain) {
+        await window.app.noteController.transferPaneNoteToMain(paneNoteId)
+      } else if (window.eventBus) {
+        window.eventBus.emit(EventTypes.NOTE.OPEN, { id: paneNoteId })
+      }
+    } catch (e) {
+      console.error('[App] 折叠副区并转移笔记失败:', e)
+      secondaryPaneApi.clearNote()
+    }
+  }
+  secondaryPaneApi.toggle()
+}
+onMounted(() => {
+  secondaryPaneCollapsed.value = secondaryPaneApi.getIsCollapsed()
+})
+// 同步副编辑区折叠状态变化到标题栏开关按钮的高亮
+watch(() => secondaryPaneApi.getIsCollapsed(), (collapsed) => {
+  secondaryPaneCollapsed.value = collapsed
+})
 </script>
 
 <template>
@@ -122,17 +188,6 @@ const handleClose = () => window.electronAPI.closeWindow()
         <header class="header" @dblclick="handleMaximize">
           <div class="tab-bar-wrapper">
             <TabBar class="tab-bar" />
-          </div>
-          <div class="window-controls">
-            <button class="window-btn minimize" @click="handleMinimize">
-              <i class="fas fa-minus"></i>
-            </button>
-            <button class="window-btn maximize" @click="handleMaximize">
-              <i :class="isMaximized ? 'far fa-clone' : 'far fa-square'"></i>
-            </button>
-            <button class="window-btn close" @click="handleClose">
-              <i class="fas fa-times"></i>
-            </button>
           </div>
         </header>
 
@@ -163,6 +218,37 @@ const handleClose = () => window.electronAPI.closeWindow()
             <i class="fas fa-plus"></i>
           </button>
         </div>
+      </div>
+
+      <!-- 副编辑区左侧的宽度调整把手 -->
+      <div class="resize-handle resize-handle-right" id="resizeHandleRight"></div>
+
+      <!-- 右侧副编辑区 -->
+      <SecondaryPane class="right-sidebar" />
+
+      <!-- 浮在窗口右上角的菜单栏控制条（始终位于软件右上角） -->
+      <div class="window-controls">
+        <button
+          class="window-btn secondary-pane-toggle"
+          :class="{ active: !secondaryPaneCollapsed, 'drag-over': isSecondaryPaneDragOver }"
+          title="副编辑区"
+          @click="toggleSecondaryPane"
+          @dragenter="onPaneButtonDragEnter"
+          @dragover="onPaneButtonDragOver"
+          @dragleave="onPaneButtonDragLeave"
+          @drop="onPaneButtonDrop"
+        >
+          <i class="fas fa-columns"></i>
+        </button>
+        <button class="window-btn minimize" @click="handleMinimize">
+          <i class="fas fa-minus"></i>
+        </button>
+        <button class="window-btn maximize" @click="handleMaximize">
+          <i :class="isMaximized ? 'far fa-clone' : 'far fa-square'"></i>
+        </button>
+        <button class="window-btn close" @click="handleClose">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
   </div>
@@ -199,10 +285,15 @@ const handleClose = () => window.electronAPI.closeWindow()
 }
 
 .window-controls {
+  /* 浮在窗口右上角：当副区展开时落在副区头部右上角；副区折叠时仍可见在 tab bar 之上 */
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 35px;
   display: flex;
-  height: 100%;
   -webkit-app-region: no-drag;
   flex-shrink: 0;
+  z-index: 200;
 }
 
 .tab-bar-wrapper {
@@ -242,6 +333,25 @@ const handleClose = () => window.electronAPI.closeWindow()
 
 .window-btn.maximize i {
   font-size: 11px;
+}
+
+.window-btn.secondary-pane-toggle i {
+  font-size: 12px;
+}
+
+.window-btn.secondary-pane-toggle.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.window-btn.secondary-pane-toggle.active:hover {
+  background: var(--accent-hover);
+}
+
+/* 拖动标签经过按钮时：绿色高亮，提示可放入 */
+.window-btn.secondary-pane-toggle.drag-over {
+  background: #22c55e;
+  color: #ffffff;
 }
 
 .header-actions {
@@ -303,6 +413,16 @@ const handleClose = () => window.electronAPI.closeWindow()
   height: 100%;
   background: transparent;
   cursor: col-resize;
+}
+
+/* 右侧副编辑区的把手：调整 ::after 居中位置以与左侧对称 */
+.resize-handle.resize-handle-right {
+  /* 副区面板在 DOM 中位于把手之后，会盖住把手右半部分，需提升层级 */
+  z-index: 5;
+}
+
+.resize-handle.resize-handle-right::after {
+  left: 50%;
 }
 
 .main-container {

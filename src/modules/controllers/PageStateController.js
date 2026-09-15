@@ -17,6 +17,11 @@ export class PageStateController {
                 isCollapsed: false,
                 width: 280
             },
+            secondaryPane: {
+                isCollapsed: true,
+                width: 360,
+                noteId: null
+            },
             openTabs: [],
             activeTabId: 'home'
         };
@@ -83,6 +88,24 @@ export class PageStateController {
             this.currentState.openTabs = order;
             this.debouncedSave();
         });
+
+        // 右侧副编辑区：折叠状态
+        this.eventBus.on(EventTypes.SECONDARY_PANE.COLLAPSE_CHANGE, (isCollapsed) => {
+            this.currentState.secondaryPane.isCollapsed = isCollapsed;
+            this.debouncedSave();
+        });
+
+        // 右侧副编辑区：宽度
+        this.eventBus.on(EventTypes.SECONDARY_PANE.WIDTH_CHANGE, (width) => {
+            this.currentState.secondaryPane.width = width;
+            this.debouncedSave();
+        });
+
+        // 右侧副编辑区：当前笔记
+        this.eventBus.on(EventTypes.SECONDARY_PANE.NOTE_CHANGE, (noteId) => {
+            this.currentState.secondaryPane.noteId = noteId || null;
+            this.debouncedSave();
+        });
     }
 
     /**
@@ -90,6 +113,11 @@ export class PageStateController {
      */
     async loadState() {
         const state = await this.pageStateService.load();
+        // 兼容：老版本保存的状态可能缺少新增字段（如 secondaryPane），
+        // 补齐缺失的键，避免后续 COLLAPSE_CHANGE 等监听器写入 undefined 子对象
+        if (!state.secondaryPane) {
+            state.secondaryPane = { isCollapsed: true, width: 360, noteId: null };
+        }
         this.currentState = state;
         return state;
     }
@@ -110,7 +138,7 @@ export class PageStateController {
 
     /**
      * 恢复页面状态
-     * @returns {Promise<{validNotes: Array, validNoteIds: Array, activeTabId: string}>}
+     * @returns {Promise<{validNotes: Array, validNoteIds: Array, activeTabId: string, secondaryNoteId: string|null}>}
      */
     async restorePageState() {
         const state = await this.loadState();
@@ -127,6 +155,28 @@ export class PageStateController {
             }
             if (state.sidebar.width) {
                 this.uiManager.leftSidebar_setWidth(state.sidebar.width);
+            }
+        }
+
+        // 恢复右侧副编辑区折叠/宽度（静默设置，不触发事件）
+        let secondaryNoteId = null;
+        if (state.secondaryPane) {
+            const pane = state.secondaryPane;
+            this.uiManager.secondaryPane._applyState({
+                isCollapsed: typeof pane.isCollapsed === 'boolean' ? pane.isCollapsed : true,
+                width: typeof pane.width === 'number' ? pane.width : 360
+            });
+
+            // 校验副区笔记有效性（若与主区标签重复则视为异常数据，去重处理）
+            if (pane.noteId) {
+                const note = await window.electronAPI.getNote(pane.noteId);
+                if (note) {
+                    // 若副区笔记 ID 同时出现在主区 openTabs 中（异常状态），过滤掉主区的重复
+                    if (Array.isArray(state.openTabs) && state.openTabs.includes(pane.noteId)) {
+                        state.openTabs = state.openTabs.filter(id => id !== pane.noteId);
+                    }
+                    secondaryNoteId = pane.noteId;
+                }
             }
         }
 
@@ -151,7 +201,7 @@ export class PageStateController {
 
         this.isRestoring = false;
 
-        return { validNotes, validNoteIds, activeTabId };
+        return { validNotes, validNoteIds, activeTabId, secondaryNoteId };
     }
 
     /**

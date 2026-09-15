@@ -3,6 +3,7 @@
  * 负责创建所有模块实例并注入依赖，然后启动应用
  */
 import { EventBus } from './EventBus.js';
+import { EventTypes } from './EventTypes.js';
 import { NoteController } from '../controllers/NoteController.js';
 import { TagController } from '../controllers/TagController.js';
 import { PageStateController } from '../controllers/PageStateController.js';
@@ -109,7 +110,7 @@ export class App {
         await this.noteController.handlePanelChange(initialPanel);
 
         // 2. 恢复页面状态：侧边栏状态 + 获取要恢复的笔记和标签页信息
-        const { validNotes, validNoteIds, activeTabId } = await this.pageStateController.restorePageState();
+        const { validNotes, validNoteIds, activeTabId, secondaryNoteId } = await this.pageStateController.restorePageState();
 
         // 3. 打开恢复的笔记
         for (const note of validNotes) {
@@ -126,6 +127,13 @@ export class App {
             this.noteController.switchToNote(activeTabId);
         } else {
             this.noteController.switchToHome();
+        }
+
+        // 5.5 恢复右侧副编辑区的笔记（若存在且有效，走与拖入同一路径）
+        if (secondaryNoteId) {
+            if (window.eventBus) {
+                window.eventBus.emit(EventTypes.SECONDARY_PANE.SET_NOTE, secondaryNoteId);
+            }
         }
 
         // 6. 速记小窗保存笔记后刷新首页列表

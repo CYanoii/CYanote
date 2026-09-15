@@ -78,6 +78,10 @@ export class NoteController {
         // 版本历史事件
         this.eventBus.on(EventTypes.VERSION.OPEN, (noteId, version) => this.openVersionPage(noteId, version));
         this.eventBus.on(EventTypes.VERSION.ROLLBACK, (noteId, version) => this.handleRollback(noteId, version));
+
+        // 右侧副编辑区事件
+        this.eventBus.on(EventTypes.SECONDARY_PANE.SET_NOTE, (noteId) => this.setSecondaryPaneNote(noteId));
+        this.eventBus.on(EventTypes.SECONDARY_PANE.CLEAR_NOTE, () => this.uiManager.secondaryPane_clearNote());
         this.eventBus.on(EventTypes.VERSION.CHANGED, (noteId) => this.refreshVersionHistory(noteId));
 
         // 页面标签更新事件（统一处理笔记和便签的标签更新）
@@ -466,6 +470,13 @@ export class NoteController {
      * @param {Object} noteData 笔记数据
      */
     async openNote(noteData) {
+        // 如果该笔记当前在右侧副编辑区，直接转移到主编辑区
+        // （共用同一份 noteData 引用，无需从磁盘重新加载）
+        if (this.uiManager.secondaryPane_getNoteId() === noteData.id) {
+            await this.transferPaneNoteToMain(noteData.id);
+            return;
+        }
+
         // 如果笔记已经打开，直接切换到它
         if (this.noteService.getOpenNoteById(noteData.id)) {
             this.switchToNote(noteData.id);
@@ -480,6 +491,24 @@ export class NoteController {
             console.error('打开笔记失败:', error);
             this.uiManager.toast_show('打开笔记失败', 'error');
         }
+    }
+
+    /**
+     * 将副编辑区当前笔记转移到主编辑区
+     * 复用 noteService.openNotes 中的共享引用，仅添加标签页与主编辑器入口
+     * 触发时机：折叠副区 / 覆盖副区内容时把旧笔记迁回主区 / 从侧边栏打开已在副区的笔记
+     * @param {string|number} noteId
+     */
+    async transferPaneNoteToMain(noteId) {
+        const noteData = this.noteService.getOpenNoteById(noteId);
+        if (!noteData) return;
+
+        // 先清空副区（销毁 vditor 实例、解除绑定）
+        this.uiManager.secondaryPane_clearNote();
+
+        // 主区标准流程：标签 + 主编辑器 + 切换激活 + 刷新标签/引用
+        // noteData 引用与 openNotes 中的保持一致，未保存的修改会随之迁移到主区
+        this.addNoteToApp(noteData);
     }
 
     /**
@@ -643,6 +672,11 @@ export class NoteController {
                 this.closeNote(noteId);
             }
 
+            // 如果笔记在副编辑区，清空副区
+            if (this.uiManager.secondaryPane_getNoteId() === noteId) {
+                this.uiManager.secondaryPane_clearNote();
+            }
+
             // 刷新笔记列表
             await this.loadAllNotes();
             // 如果当前在回收站面板，刷新回收站内容
@@ -654,6 +688,51 @@ export class NoteController {
         } catch (error) {
             console.error('移入回收站失败:', error);
             this.uiManager.toast_show('移入回收站失败', 'error');
+        }
+    }
+
+    /**
+     * 将笔记放入副编辑区
+     * 处理覆盖语义、主区笔记移除、标签/引用刷新
+     * @param {string|number} noteId 笔记ID
+     */
+    async setSecondaryPaneNote(noteId) {
+        try {
+            // 1. 若副区已有笔记：覆盖时先把旧笔记转到主编辑区
+            const oldPaneNoteId = this.uiManager.secondaryPane_getNoteId();
+            if (oldPaneNoteId && oldPaneNoteId !== noteId) {
+                await this.transferPaneNoteToMain(oldPaneNoteId);
+            } else if (oldPaneNoteId === noteId) {
+                return;
+            }
+
+            // 2. 取完整笔记（取不到说明笔记不存在或版本预览页 id，直接忽略）
+            const fullNote = await this.noteService.getNote(noteId);
+            if (!fullNote) {
+                return;
+            }
+
+            // 3. 若该笔记在主区打开，先关闭（移除标签与编辑器）
+            if (this.noteService.getOpenNoteById(noteId)) {
+                this.closeNote(noteId);
+            }
+
+            // 4. 写入副区：编辑器仓库 + noteService.openNotes（共享同一 noteData 引用，
+            //    保存/查找走主路径，与主编辑区行为一致）
+            this.uiManager.secondaryPane_setNote(fullNote);
+            this.noteService.addOpenNote(noteId, fullNote);
+
+            // 5. 刷新标签与引用列表（通过 NoteTagCoordinator 触发，UIManager 扇出到副区仓库）
+            await this.noteTagCoordinator.refreshNoteTags(noteId, fullNote);
+            await this.noteTagCoordinator.refreshNoteReferences(noteId);
+
+            // 6. 若副区当前处于折叠状态，自动展开
+            if (this.uiManager.secondaryPane.getIsCollapsed()) {
+                this.uiManager.secondaryPane_expand();
+            }
+        } catch (error) {
+            console.error('[NoteController] 设置副编辑区笔记失败:', error);
+            this.uiManager.toast_show('副编辑区加载失败', 'error');
         }
     }
 
@@ -818,6 +897,11 @@ export class NoteController {
             // 如果笔记当前打开，先关闭它
             if (this.noteService.getOpenNoteById(noteId)) {
                 this.closeNote(noteId);
+            }
+
+            // 如果笔记在副编辑区，清空副区
+            if (this.uiManager.secondaryPane_getNoteId() === noteId) {
+                this.uiManager.secondaryPane_clearNote();
             }
 
             // 刷新回收站面板

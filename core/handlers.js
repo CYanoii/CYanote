@@ -108,6 +108,7 @@ async function setupIpcHandlers(options = {}) {
       // 文件不存在，返回默认状态
       return {
         sidebar: { isCollapsed: false, width: 280 },
+        secondaryPane: { isCollapsed: true, width: 360, noteId: null },
         openTabs: [],
         activeTabId: 'home'
       };
