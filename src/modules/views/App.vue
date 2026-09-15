@@ -194,30 +194,31 @@ watch(() => secondaryPaneApi.getIsCollapsed(), (collapsed) => {
         <main class="main-content">
           <HomePage class="home-view" />
           <Editor class="notes-container" />
-        </main>
 
-        <!-- 悬浮新建页面按钮（仅首页显示） -->
-        <div v-if="isOnHomePage" class="fab-container">
-          <div v-if="showPageTypeDropdown" class="fab-dropdown">
-            <button class="fab-dropdown-item" @click="createStickyPage">
-              <i class="fas fa-sticky-note"></i>
-              <span>便签页</span>
-            </button>
-            <button class="fab-dropdown-item" @click="createNotePage">
-              <i class="fas fa-file-alt"></i>
-              <span>笔记页</span>
+          <!-- 悬浮新建页面按钮（仅首页显示，相对 main-content 定位，
+               这样副编辑区展开时按钮仍贴着首页右缘而非窗口右缘） -->
+          <div v-if="isOnHomePage" class="fab-container">
+            <div v-if="showPageTypeDropdown" class="fab-dropdown">
+              <button class="fab-dropdown-item" @click="createStickyPage">
+                <i class="fas fa-sticky-note"></i>
+                <span>便签页</span>
+              </button>
+              <button class="fab-dropdown-item" @click="createNotePage">
+                <i class="fas fa-file-alt"></i>
+                <span>笔记页</span>
+              </button>
+            </div>
+            <button
+              class="fab-new-note"
+              id="fabNewNote"
+              :class="{ active: showPageTypeDropdown }"
+              @click.stop="toggleDropdown"
+              title="新建页面"
+            >
+              <i class="fas fa-plus"></i>
             </button>
           </div>
-          <button
-            class="fab-new-note"
-            id="fabNewNote"
-            :class="{ active: showPageTypeDropdown }"
-            @click.stop="toggleDropdown"
-            title="新建页面"
-          >
-            <i class="fas fa-plus"></i>
-          </button>
-        </div>
+        </main>
       </div>
 
       <!-- 副编辑区左侧的宽度调整把手 -->
@@ -451,9 +452,10 @@ watch(() => secondaryPaneApi.getIsCollapsed(), (collapsed) => {
   display: none;
 }
 
-/* 悬浮新建页面按钮容器 */
+/* 悬浮新建页面按钮容器：相对于 .main-content 定位，
+   这样副编辑区展开时按钮仍贴着主内容区右缘，不会跑到副区下方 */
 .fab-container {
-  position: fixed;
+  position: absolute;
   bottom: 40px;
   right: 20px;
   z-index: 1000;
