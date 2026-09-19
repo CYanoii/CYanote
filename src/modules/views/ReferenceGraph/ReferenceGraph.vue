@@ -63,10 +63,18 @@ function buildGraphData(notes) {
 
 // 渲染图
 function renderGraph() {
-  if (!svgRef.value || !props.notes.length) return
+  if (!svgRef.value) return
 
-  // 清除旧内容
+  // 先停止旧 simulation（避免空态切换时仍在 tick）
+  if (simulation) {
+    simulation.stop()
+    simulation = null
+  }
+
+  // 清除旧内容（无论有无数据都清，避免标签筛选无匹配时残留上一轮节点/文字）
   d3.select(svgRef.value).selectAll('*').remove()
+
+  if (!props.notes.length) return
 
   const svg = d3.select(svgRef.value)
   const width = svgRef.value.clientWidth
